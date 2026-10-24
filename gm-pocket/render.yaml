@@ -1,0 +1,34 @@
+# Blueprint Render — version GRATUITE.
+# Render > New > Blueprint > choisir le dépôt GitHub.
+# La base de données est hébergée chez Neon (gratuit, n'expire pas) car la base gratuite
+# de Render est supprimée au bout de 30 jours. Voir README > « Base de données Neon ».
+services:
+  - type: web
+    name: gm-pocket
+    runtime: node
+    region: frankfurt
+    plan: free               # s'endort après 15 min sans visite, réveil en ~1 min
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false          # l'adresse de connexion Neon (postgresql://...)
+      - key: PGSSL
+        value: "1"
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false          # à saisir dans Render (clé de console.anthropic.com)
+      - key: FAMILY_CODE
+        sync: false          # le code que tu donnes à la famille pour créer un compte
+      - key: MODEL_IMPORT
+        value: claude-sonnet-5-5
+      - key: MODEL_ASK
+        value: claude-sonnet-5-5
+      - key: DAILY_QUESTION_LIMIT
+        value: "150"
+      - key: DAILY_IMPORT_LIMIT
+        value: "20"

@@ -1,0 +1,21 @@
+{
+  "appId": "com.yumzg.gmpocket",
+  "appName": "GM Pocket",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#0e1f5b"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "backgroundColor": "#0e1f5b",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP"
+    },
+    "SystemBars": {
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover",
+      "style": "DARK"
+    }
+  }
+}
