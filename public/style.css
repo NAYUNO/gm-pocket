@@ -292,3 +292,4 @@ a { color: var(--gold); }
 .form select {
   width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: #fffaf0; color: var(--ink); font-weight: 400;
 }
+.form label.autoread { display: flex; align-items: center; gap: 10px; font-weight: 700; margin: 0; }
