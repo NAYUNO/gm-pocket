@@ -13,7 +13,8 @@ permissions:
 
 jobs:
   apk:
-    runs-on: ubuntu-latest
+    # Ubuntu 24.04 : le SDK Android y est préinstallé (ubuntu-latest passe à Ubuntu 26)
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
@@ -28,7 +29,8 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: android-actions/setup-android@v3
+      - name: SDK Android
+        run: echo "ANDROID_HOME=$ANDROID_HOME" && ls "$ANDROID_HOME/platforms"
 
       - name: Dépendances
         run: npm ci
