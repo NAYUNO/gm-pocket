@@ -1,7 +1,9 @@
 // Service worker : met en cache l'interface pour un démarrage rapide.
 // Les appels /api ne sont jamais mis en cache (règles et réponses toujours à jour).
-const CACHE = 'gm-pocket-v5';
-const SHELL = ['/', '/index.html', '/style.css', '/app.js', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png'];
+const CACHE = 'gm-pocket-v8';
+const SHELL = ['/', '/index.html', '/style.css', '/app.js', '/config.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/logo.png',
+  '/fonts/fraunces-latin-600-normal.woff2', '/fonts/fraunces-latin-800-normal.woff2',
+  '/fonts/atkinson-hyperlegible-latin-400-normal.woff2', '/fonts/atkinson-hyperlegible-latin-700-normal.woff2'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

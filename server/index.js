@@ -24,6 +24,23 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '1mb' }));
 
+// L'appli Android (Capacitor) charge l'interface depuis https://localhost et appelle l'API
+// depuis cette origine : on l'autorise explicitement. L'authentification passe par un jeton
+// (en-tête Authorization), pas par cookie, donc pas besoin de « credentials ».
+const APP_ORIGINS = new Set(['https://localhost', 'http://localhost', 'capacitor://localhost']);
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && APP_ORIGINS.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+  }
+  next();
+});
+
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 function cleanName(s) {
@@ -62,8 +79,8 @@ app.post('/api/register', wrap(async (req, res) => {
 
   const hash = await bcrypt.hash(password, 10);
   const { rows } = await query('INSERT INTO users (name, password_hash) VALUES ($1, $2) RETURNING id, name', [name, hash]);
-  setSessionCookie(res, rows[0].id);
-  res.json({ user: rows[0] });
+  const token = setSessionCookie(res, rows[0].id);
+  res.json({ user: rows[0], token });
 }));
 
 app.post('/api/login', wrap(async (req, res) => {
@@ -76,8 +93,8 @@ app.post('/api/login', wrap(async (req, res) => {
     recordAttempt(req.ip);
     return res.status(401).json({ error: 'Prénom ou mot de passe incorrect' });
   }
-  setSessionCookie(res, user.id);
-  res.json({ user: { id: user.id, name: user.name } });
+  const token = setSessionCookie(res, user.id);
+  res.json({ user: { id: user.id, name: user.name }, token });
 }));
 
 app.post('/api/logout', (_req, res) => {

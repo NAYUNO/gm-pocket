@@ -2,6 +2,17 @@
 const $app = document.getElementById('app');
 const state = { user: null, modes: {}, games: [], threads: {} };
 
+// ------------------------------------------------------------------ Plateforme (web ou appli Android)
+
+const Cap = window.Capacitor;
+const IS_NATIVE = !!Cap?.isNativePlatform?.();
+// Dans l'appli, l'interface est embarquée et l'API est sur Render (adresse dans config.js).
+const API_BASE = IS_NATIVE ? String(window.GM_CONFIG?.apiUrl || '').replace(/\/$/, '') : '';
+const nativePlugin = (name) => (IS_NATIVE ? Cap.Plugins?.[name] || Cap.registerPlugin?.(name) : null);
+
+function getToken() { try { return localStorage.getItem('gmpocket.token'); } catch { return null; } }
+function setToken(t) { try { t ? localStorage.setItem('gmpocket.token', t) : localStorage.removeItem('gmpocket.token'); } catch { /* indisponible */ } }
+
 // ------------------------------------------------------------------ Utilitaires
 
 const esc = (s) =>
@@ -16,17 +27,26 @@ const icon = {
 };
 
 async function api(path, opts = {}) {
-  const init = { credentials: 'same-origin', ...opts };
+  const init = { credentials: 'same-origin', ...opts, headers: {} };
+  delete init.json;
   if (opts.json !== undefined) {
     init.method = init.method || 'POST';
-    init.headers = { 'Content-Type': 'application/json' };
+    init.headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(opts.json);
   }
-  const res = await fetch(path, init);
+  const token = IS_NATIVE ? getToken() : null;
+  if (token) init.headers.Authorization = `Bearer ${token}`;
+  let res;
+  try {
+    res = await fetch(API_BASE + path, init);
+  } catch {
+    throw new Error('Pas de connexion au serveur. Vérifie le réseau et réessaie.');
+  }
   let data = {};
   try { data = await res.json(); } catch { /* réponse vide */ }
   if (res.status === 401 && path !== '/api/login') {
     state.user = null;
+    if (IS_NATIVE) setToken(null);
     location.hash = '#/login';
   }
   if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
@@ -99,7 +119,15 @@ function md(src) {
 // ------------------------------------------------------------------ Voix
 
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const canSpeak = 'speechSynthesis' in window;
+const NativeSR = nativePlugin('SpeechRecognition');
+const NativeTTS = nativePlugin('TextToSpeech');
+const canListen = !!(NativeSR || Recognition);
+const canSpeak = !!NativeTTS || 'speechSynthesis' in window;
+
+function stopSpeaking() {
+  if (NativeTTS) NativeTTS.stop().catch(() => {});
+  else if ('speechSynthesis' in window) speechSynthesis.cancel();
+}
 
 function frenchVoice() {
   const voices = speechSynthesis.getVoices();
@@ -107,11 +135,11 @@ function frenchVoice() {
     || voices.find((v) => v.lang === 'fr-FR')
     || voices.find((v) => v.lang?.startsWith('fr'));
 }
-if (canSpeak) speechSynthesis.onvoiceschanged = () => {};
+if (!NativeTTS && 'speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => {};
 
 function speak(text) {
   if (!canSpeak) return;
-  speechSynthesis.cancel();
+  stopSpeaking();
   const clean = String(text)
     .replace(/\[[^\]]*\]/g, '')
     .replace(/[#*`>_]/g, '')
@@ -119,6 +147,10 @@ function speak(text) {
     .replace(/\n+/g, '. ')
     .replace(/\.\s*\./g, '.')
     .trim();
+  if (NativeTTS) {
+    NativeTTS.speak({ text: clean, lang: 'fr-FR', rate: 1.0 }).catch(() => {});
+    return;
+  }
   const u = new SpeechSynthesisUtterance(clean);
   u.lang = 'fr-FR';
   const v = frenchVoice();
@@ -137,7 +169,7 @@ function setAutoRead(v) {
 // ------------------------------------------------------------------ Routeur
 
 function route() {
-  if (canSpeak) speechSynthesis.cancel();
+  stopSpeaking();
   const hash = location.hash || '#/';
   if (!state.user && hash !== '#/login') { location.hash = '#/login'; return; }
   let m;
@@ -158,8 +190,7 @@ function viewLogin() {
   const render = () => {
     $app.innerHTML = `
       <div class="brand">
-        <img class="logo" src="/icons/icon.svg" alt="">
-        <h1>GM Pocket</h1>
+        <img class="brand-logo" src="/icons/logo.png" alt="GM Pocket — Rules Manager">
         <p>Le maître du jeu dans ta poche.</p>
       </div>
       <form class="paper form" id="f" novalidate>
@@ -182,7 +213,8 @@ function viewLogin() {
       btn.disabled = true; err.hidden = true;
       try {
         const body = Object.fromEntries(new FormData(e.target));
-        const { user } = await api(mode === 'login' ? '/api/login' : '/api/register', { json: body });
+        const { user, token } = await api(mode === 'login' ? '/api/login' : '/api/register', { json: body });
+        if (IS_NATIVE) setToken(token);
         state.user = user;
         await loadMe();
         location.hash = '#/';
@@ -212,7 +244,8 @@ async function viewLibrary() {
     <ul class="card-list" id="list"><li class="empty"><div class="spinner" style="margin:auto"></div></li></ul>
     <a class="fab" href="#/add">${icon.plus} Ajouter un jeu</a>`;
   document.getElementById('logout').onclick = async () => {
-    await api('/api/logout', { json: {} });
+    await api('/api/logout', { json: {} }).catch(() => {});
+    setToken(null);
     state.user = null;
     location.hash = '#/login';
   };
@@ -281,11 +314,15 @@ async function viewAdd(gameId) {
         ? `<p class="hint" style="margin:0">Les nouvelles pages seront fusionnées avec les règles de <strong>${esc(existing.name)}</strong>.</p>`
         : `<label>Nom du jeu <span class="hint">(facultatif, l'IA le devine sinon)</span>
             <input type="text" name="name" placeholder="ex. Les Aventuriers du Rail"></label>`}
-      <div class="drop" id="drop" role="button" tabindex="0">
-        <strong>📷 Photos ou PDF du livret</strong>
-        Une photo par page, bien à plat et éclairée. 20 fichiers max par envoi.
+      <div class="pick">
+        <button type="button" class="drop" id="shoot"><strong>📷 Prendre une page en photo</strong>
+          Recommence pour chaque page</button>
+        <button type="button" class="drop" id="drop"><strong>🖼️ Choisir photos ou PDF</strong>
+          Depuis la galerie ou les fichiers</button>
       </div>
+      <p class="hint" style="margin:0">Une photo par page, bien à plat et éclairée. 20 fichiers max par envoi.</p>
       <input type="file" id="file" accept="image/*,application/pdf" multiple hidden>
+      <input type="file" id="camera" accept="image/*" capture="environment" hidden>
       <div class="thumbs" id="thumbs"></div>
       <div class="working" id="working" hidden><div class="spinner"></div>
         <div><strong>L'IA lit le livret…</strong><br><span class="hint">Ça peut prendre 1 à 2 minutes. Garde l'appli ouverte.</span></div></div>
@@ -297,8 +334,9 @@ async function viewAdd(gameId) {
   const thumbs = document.getElementById('thumbs');
   const go = document.getElementById('go');
   const drop = document.getElementById('drop');
+  const camera = document.getElementById('camera');
   drop.onclick = () => input.click();
-  drop.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') input.click(); };
+  document.getElementById('shoot').onclick = () => camera.click();
 
   const drawThumbs = () => {
     thumbs.innerHTML = files.map((f, i) => `
@@ -308,16 +346,18 @@ async function viewAdd(gameId) {
     go.disabled = !files.length;
   };
 
-  input.onchange = async () => {
-    for (const raw of input.files) {
+  const addFiles = async (el) => {
+    for (const raw of el.files) {
       if (files.length >= 20) { toast('20 fichiers maximum par envoi'); break; }
       const f = await compressImage(raw);
       f.url = f.type.startsWith('image/') ? URL.createObjectURL(f) : null;
       files.push(f);
     }
-    input.value = '';
+    el.value = '';
     drawThumbs();
   };
+  input.onchange = () => addFiles(input);
+  camera.onchange = () => addFiles(camera);
 
   document.getElementById('f').onsubmit = async (e) => {
     e.preventDefault();
@@ -373,9 +413,9 @@ function paneAsk(pane, game) {
     ${canSpeak ? `<label class="autoread"><input type="checkbox" id="autoread" ${getAutoRead() ? 'checked' : ''}> Lire les réponses à voix haute</label>` : ''}
     <div class="thread" id="thread"></div>
     <div class="askbar"><div class="inner">
-      <textarea id="qin" rows="1" placeholder="${Recognition ? 'Pose ta question ou appuie sur le micro…' : 'Pose ta question…'}"></textarea>
+      <textarea id="qin" rows="1" placeholder="${canListen ? 'Pose ta question ou appuie sur le micro…' : 'Pose ta question…'}"></textarea>
       <button class="send" id="send" aria-label="Envoyer">${icon.send}</button>
-      ${Recognition ? `<button class="mic" id="mic" aria-label="Parler">${icon.mic}</button>` : ''}
+      ${canListen ? `<button class="mic" id="mic" aria-label="Parler">${icon.mic}</button>` : ''}
     </div></div>`;
 
   const $thread = document.getElementById('thread');
@@ -402,7 +442,7 @@ function paneAsk(pane, game) {
 
   const ask = async ({ question = '', mode = 'ask' }) => {
     if (mode === 'ask' && !question.trim()) return;
-    if (canSpeak) speechSynthesis.cancel();
+    stopSpeaking();
     const history = thread.filter((t) => !t.pending).slice(-4).map(({ question, answer }) => ({ question, answer }));
     const entry = { question: mode === 'ask' ? question : state.modes[mode], pending: true };
     thread.push(entry);
@@ -430,9 +470,43 @@ function paneAsk(pane, game) {
   const mic = document.getElementById('mic');
   if (mic) {
     let rec = null;
+    let nativeOn = false;
+
+    // Appli Android : reconnaissance vocale native (plus fiable que celle de la WebView).
+    const nativeMic = async () => {
+      if (nativeOn) { NativeSR.stop().catch(() => {}); return; }
+      try {
+        const { available } = await NativeSR.available();
+        if (!available) { toast("La reconnaissance vocale n'est pas disponible sur ce téléphone"); return; }
+        let perm = await NativeSR.checkPermissions();
+        if (perm.speechRecognition !== 'granted') perm = await NativeSR.requestPermissions();
+        if (perm.speechRecognition !== 'granted') { toast("Autorise le micro pour poser tes questions à l'oral"); return; }
+        stopSpeaking();
+        await NativeSR.removeAllListeners();
+        qin.value = '';
+        await NativeSR.addListener('partialResults', (d) => {
+          if (d.matches?.[0]) { qin.value = d.matches[0]; autoGrow(); }
+        });
+        await NativeSR.addListener('listeningState', (d) => {
+          if (d.status !== 'stopped' || !nativeOn) return;
+          nativeOn = false;
+          mic.classList.remove('listening');
+          if (qin.value.trim()) sendText();
+        });
+        nativeOn = true;
+        mic.classList.add('listening');
+        await NativeSR.start({ language: 'fr-FR', maxResults: 1, partialResults: true, popup: false });
+      } catch (e) {
+        nativeOn = false;
+        mic.classList.remove('listening');
+        toast('Micro : ' + (e.message || e));
+      }
+    };
+
     mic.onclick = () => {
+      if (NativeSR) { nativeMic(); return; }
       if (rec) { rec.stop(); return; }
-      if (canSpeak) speechSynthesis.cancel();
+      stopSpeaking();
       rec = new Recognition();
       rec.lang = 'fr-FR';
       rec.interimResults = true;
@@ -538,36 +612,65 @@ function paneNotes(pane, game) {
 
 // ------------------------------------------------------------------ Démarrage
 
-// Hébergement gratuit : le serveur s'endort après 15 min. On affiche un message
-// pendant le réveil (jusqu'à ~1 min) au lieu d'un écran figé.
-function showWaking() {
+// Écran de démarrage (splash) : affiché tout de suite, le temps de joindre le serveur.
+// Hébergement gratuit : le serveur s'endort après 15 min, le réveil peut prendre ~1 min.
+function showSplash() {
   $app.innerHTML = `
-    <div class="brand">
-      <img class="logo" src="/icons/icon.svg" alt="">
-      <h1>GM Pocket</h1>
-      <p>Le maître du jeu se réveille…</p>
-    </div>
-    <div class="paper" style="margin:0 auto;max-width:420px">
-      <div class="working" style="background:none">
+    <div class="splash">
+      <img class="splash-logo" src="/icons/logo.png" alt="GM Pocket — Rules Manager">
+      <div class="splash-status" id="splash-status" hidden>
         <div class="spinner"></div>
-        <div><strong>Démarrage du serveur</strong><br>
-        <span class="hint">Ça peut prendre jusqu'à une minute après une longue pause.</span></div>
+        <span>Le maître du jeu se réveille…<br><small>Jusqu'à une minute après une longue pause.</small></span>
       </div>
+      <p class="splash-sign">yumzg</p>
     </div>`;
 }
 
-(async () => {
-  const slow = setTimeout(showWaking, 1200);
-  try { await loadMe(); } catch { /* pas connecté */ }
+function showOffline(message) {
+  showSplash();
+  const st = document.getElementById('splash-status');
+  st.hidden = false;
+  st.innerHTML = `<span>${esc(message)}</span><button class="btn gold" id="retry">Réessayer</button>`;
+  document.getElementById('retry').onclick = boot;
+}
+
+async function boot() {
+  showSplash();
+  const started = Date.now();
+  // Le splash natif (icône sur fond bleu) laisse place au splash de l'appli dès qu'il est affiché.
+  requestAnimationFrame(() => nativePlugin('SplashScreen')?.hide({ fadeOutDuration: 250 }).catch?.(() => {}));
+  const slow = setTimeout(() => {
+    const st = document.getElementById('splash-status');
+    if (st) st.hidden = false;
+  }, 1500);
+
+  if (IS_NATIVE && !API_BASE) {
+    clearTimeout(slow);
+    showOffline("L'adresse du serveur n'est pas configurée dans l'appli (mobile.config.json).");
+    return;
+  }
+  try {
+    await loadMe();
+  } catch (e) {
+    if (/Pas de connexion/.test(e.message)) {
+      clearTimeout(slow);
+      showOffline('Impossible de joindre le serveur. Vérifie ta connexion internet.');
+      return;
+    }
+    /* sinon : pas connecté → écran de connexion */
+  }
   clearTimeout(slow);
-  route();
-})();
+  // Dans l'appli, on laisse le splash visible un court instant pour éviter un flash.
+  const wait = IS_NATIVE ? Math.max(0, 900 - (Date.now() - started)) : 0;
+  setTimeout(route, wait);
+}
+boot();
 
 // Quand on revient sur l'appli après une pause, on réveille le serveur en avance.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') fetch('/healthz', { cache: 'no-store' }).catch(() => {});
+  if (document.visibilityState === 'visible') fetch(API_BASE + '/healthz', { cache: 'no-store' }).catch(() => {});
 });
 
-if ('serviceWorker' in navigator) {
+if (!IS_NATIVE && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }

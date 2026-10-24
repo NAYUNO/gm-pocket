@@ -1,0 +1,65 @@
+# Compile l'appli Android (APK) à chaque mise à jour du dépôt,
+# et la publie dans « Releases » pour l'installer directement depuis le téléphone.
+name: Appli Android
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Dépendances
+        run: npm ci
+
+      - name: Préparer l'appli (interface, icônes, splash, réglages Android)
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          API_URL: ${{ vars.API_URL }}
+        run: npm run build:mobile
+
+      - name: Compiler l'APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk "../GM-Pocket-1.0.${{ github.run_number }}.apk"
+
+      - name: Garder l'APK dans le résumé de la compilation
+        uses: actions/upload-artifact@v4
+        with:
+          name: GM-Pocket-1.0.${{ github.run_number }}
+          path: GM-Pocket-*.apk
+
+      - name: Publier dans Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: GM Pocket 1.0.${{ github.run_number }}
+          body: |
+            Appli Android GM Pocket. Sur le téléphone : télécharge le fichier .apk ci-dessous puis ouvre-le pour l'installer
+            (la première fois, autorise l'installation depuis ton navigateur).
+          files: GM-Pocket-*.apk
+          make_latest: true

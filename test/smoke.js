@@ -83,6 +83,24 @@ try {
   cookie = '';
   assert.equal((await call('/api/login', { json: { name: 'ALEX', password: 'motdepasse' } })).status, 200, 'connexion insensible à la casse');
 
+  // Appli Android : jeton Bearer sans cookie + CORS depuis https://localhost
+  const login = await call('/api/login', { json: { name: 'Alex', password: 'motdepasse' } });
+  assert.ok(login.data.token, 'le login renvoie un jeton');
+  cookie = '';
+  const bearer = await fetch(base + '/api/me', {
+    headers: { authorization: `Bearer ${login.data.token}`, origin: 'https://localhost' },
+  });
+  assert.equal(bearer.status, 200, 'le jeton Bearer suffit');
+  assert.equal(bearer.headers.get('access-control-allow-origin'), 'https://localhost');
+  const pre = await fetch(base + '/api/games', {
+    method: 'OPTIONS',
+    headers: { origin: 'https://localhost', 'access-control-request-method': 'POST', 'access-control-request-headers': 'authorization' },
+  });
+  assert.equal(pre.status, 204);
+  const evil = await fetch(base + '/api/me', { headers: { origin: 'https://evil.example' } });
+  assert.equal(evil.headers.get('access-control-allow-origin'), null, 'origine inconnue refusée');
+  assert.equal((await fetch(base + '/api/me', { headers: { authorization: 'Bearer faux.jeton.xx' } })).status, 401);
+
   console.log('✅ Tous les tests passent');
 } finally {
   server.close();

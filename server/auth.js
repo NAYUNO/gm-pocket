@@ -42,20 +42,29 @@ function readCookie(req, name) {
   return null;
 }
 
+// Pose le cookie (navigateur) et renvoie le même jeton (appli Android).
 export function setSessionCookie(res, userId) {
+  const token = createToken(userId);
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   res.setHeader(
     'Set-Cookie',
-    `${COOKIE}=${createToken(userId)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE_DAYS * 86400}${secure}`
+    `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE_DAYS * 86400}${secure}`
   );
+  return token;
 }
 
 export function clearSessionCookie(res) {
   res.setHeader('Set-Cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
 }
 
+// Le navigateur utilise le cookie ; l'appli Android envoie le jeton dans « Authorization: Bearer ».
+function readBearer(req) {
+  const h = req.headers.authorization || '';
+  return h.startsWith('Bearer ') ? h.slice(7).trim() : null;
+}
+
 export function requireUser(req, res, next) {
-  const userId = verifyToken(readCookie(req, COOKIE));
+  const userId = verifyToken(readBearer(req) || readCookie(req, COOKIE));
   if (!userId) return res.status(401).json({ error: 'Connexion requise' });
   req.userId = userId;
   next();
