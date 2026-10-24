@@ -47,6 +47,8 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
           cp app/build/outputs/apk/release/app-release.apk "../GM-Pocket-1.0.${{ github.run_number }}.apk"
+          # Nom fixe : lien de téléchargement permanent …/releases/latest/download/GM-Pocket.apk
+          cp app/build/outputs/apk/release/app-release.apk ../GM-Pocket.apk
 
       - name: Garder l'APK dans le résumé de la compilation
         uses: actions/upload-artifact@v4
@@ -62,5 +64,7 @@ jobs:
           body: |
             Appli Android GM Pocket. Sur le téléphone : télécharge le fichier .apk ci-dessous puis ouvre-le pour l'installer
             (la première fois, autorise l'installation depuis ton navigateur).
-          files: GM-Pocket-*.apk
+          files: |
+            GM-Pocket-*.apk
+            GM-Pocket.apk
           make_latest: true
