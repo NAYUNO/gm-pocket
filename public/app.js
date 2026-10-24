@@ -18,13 +18,36 @@ function setToken(t) { try { t ? localStorage.setItem('gmpocket.token', t) : loc
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const icon = {
-  back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
-  chev: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>',
-  mic: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
-  send: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
-  plus: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+// Icônes SVG (trait, couleur héritée du texte)
+const P = {
+  back: '<path d="M15 18l-6-6 6-6"/>',
+  chev: '<path d="M9 6l6 6-6 6"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  send: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  camera: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>',
+  files: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
+  speaker: '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>',
+  bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  setup: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7M14 17.5h7"/>',
+  trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 21h8M9.5 17h5"/>',
+  newbie: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.6v.6M12 17.2v.1"/>',
+  turn: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>',
+  chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+  book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M8 7h7"/>',
+  note: '<path d="M5 4h14v12l-4 4H5z"/><path d="M15 20v-4h4M8 9h8M8 13h5"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  logout: '<path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3M16 17l5-5-5-5M21 12H9"/>',
+  retry: '<path d="M4 12a8 8 0 0 1 13.7-5.6L20 9M20 4v5h-5M20 12a8 8 0 0 1-13.7 5.6L4 15M4 20v-5h5"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+  dice: '<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="16" cy="16" r="1.3" fill="currentColor"/>',
+  save: '<path d="M5 12l4 4L19 6"/>',
 };
+const ic = (name, size = 20, sw = 2.2) =>
+  `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]}</svg>`;
+const icon = { back: ic('back', 22, 2.4), chev: ic('chev', 18, 2.4), mic: ic('mic', 26), send: ic('send', 22, 2.4), plus: ic('plus', 20, 2.6) };
+const MODE_ICONS = { resume: 'bolt', setup: 'setup', win: 'trophy', newbie: 'newbie', turn: 'turn' };
 
 async function api(path, opts = {}) {
   const init = { credentials: 'same-origin', ...opts, headers: {} };
@@ -238,9 +261,9 @@ async function viewLibrary() {
   $app.innerHTML = `
     <header class="top">
       <h1>GM Pocket<span class="dot">.</span></h1>
-      <button class="ghost" id="logout">${esc(state.user.name)} · Quitter</button>
+      <button class="ghost" id="logout">${esc(state.user.name)} ${ic('logout', 16)}</button>
     </header>
-    <input class="search" id="q" type="search" placeholder="Chercher un jeu…" aria-label="Chercher un jeu">
+    <label class="search-wrap">${ic('search', 18)}<input class="search" id="q" type="search" placeholder="Chercher un jeu…" aria-label="Chercher un jeu"></label>
     <ul class="card-list" id="list"><li class="empty"><div class="spinner" style="margin:auto"></div></li></ul>
     <a class="fab" href="#/add">${icon.plus} Ajouter un jeu</a>`;
   document.getElementById('logout').onclick = async () => {
@@ -259,7 +282,7 @@ async function viewLibrary() {
     const f = filter.trim().toLowerCase();
     const items = state.games.filter((g) => g.name.toLowerCase().includes(f));
     if (!state.games.length) {
-      list.innerHTML = `<li class="empty"><div class="big">La ludothèque est vide</div>
+      list.innerHTML = `<li class="empty"><div class="empty-ic">${ic('dice', 44, 1.6)}</div><div class="big">La ludothèque est vide</div>
         Prends en photo le livret de règles d'un jeu (ou importe son PDF) pour commencer.</li>`;
       return;
     }
@@ -315,9 +338,9 @@ async function viewAdd(gameId) {
         : `<label>Nom du jeu <span class="hint">(facultatif, l'IA le devine sinon)</span>
             <input type="text" name="name" placeholder="ex. Les Aventuriers du Rail"></label>`}
       <div class="pick">
-        <button type="button" class="drop" id="shoot"><strong>📷 Prendre une page en photo</strong>
+        <button type="button" class="drop" id="shoot"><span class="drop-ic">${ic('camera', 30, 1.8)}</span><strong>Prendre une page en photo</strong>
           Recommence pour chaque page</button>
-        <button type="button" class="drop" id="drop"><strong>🖼️ Choisir photos ou PDF</strong>
+        <button type="button" class="drop" id="drop"><span class="drop-ic">${ic('files', 30, 1.8)}</span><strong>Choisir photos ou PDF</strong>
           Depuis la galerie ou les fichiers</button>
       </div>
       <p class="hint" style="margin:0">Une photo par page, bien à plat et éclairée. 20 fichiers max par envoi.</p>
@@ -395,7 +418,7 @@ async function viewGame(id, tab) {
     <p class="meta-line">${[game.players, game.duration].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</p>
     <div class="tabs" role="tablist">
       ${[['ask', 'Demander'], ['rules', 'Règles'], ['notes', 'Notes']].map(([k, l]) =>
-        `<button role="tab" aria-selected="${tab === k}" data-tab="${k}">${l}</button>`).join('')}
+        `<button role="tab" aria-selected="${tab === k}" data-tab="${k}">${ic({ ask: 'chat', rules: 'book', notes: 'note' }[k], 17)} ${l}</button>`).join('')}
     </div>
     <section id="pane"></section>`;
   $app.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => (location.hash = `#/game/${id}/${b.dataset.tab}`)));
@@ -409,7 +432,7 @@ async function viewGame(id, tab) {
 function paneAsk(pane, game) {
   const thread = (state.threads[game.id] ||= []);
   pane.innerHTML = `
-    <div class="chips">${Object.entries(state.modes).map(([k, l]) => `<button class="chip" data-mode="${k}">${esc(l)}</button>`).join('')}</div>
+    <div class="chips">${Object.entries(state.modes).map(([k, l]) => `<button class="chip" data-mode="${k}">${ic(MODE_ICONS[k] || 'bolt', 16)} ${esc(l)}</button>`).join('')}</div>
     ${canSpeak ? `<label class="autoread"><input type="checkbox" id="autoread" ${getAutoRead() ? 'checked' : ''}> Lire les réponses à voix haute</label>` : ''}
     <div class="thread" id="thread"></div>
     <div class="askbar"><div class="inner">
@@ -434,7 +457,7 @@ function paneAsk(pane, game) {
       ${t.pending
         ? '<div class="paper a"><div class="spinner"></div></div>'
         : `<div class="paper a"><div class="md">${md(t.answer)}</div>
-            <div class="tools">${canSpeak ? `<button data-say="${i}">🔊 Écouter</button>` : ''}</div></div>`}`).join('');
+            <div class="tools">${canSpeak ? `<button data-say="${i}">${ic('speaker', 16)} Écouter</button>` : ''}</div></div>`}`).join('');
     $thread.querySelectorAll('[data-say]').forEach((b) => (b.onclick = () => speak(thread[Number(b.dataset.say)].answer)));
     window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
   };
@@ -540,12 +563,12 @@ function paneRules(pane, game) {
   const view = () => {
     pane.innerHTML = `
       <div class="rules-actions">
-        <a class="btn gold" href="#/add?game=${game.id}" style="text-decoration:none">+ Ajouter des pages</a>
-        <button class="btn light" id="edit">Corriger le texte</button>
+        <a class="btn gold" href="#/add?game=${game.id}" style="text-decoration:none">${ic('plus', 18, 2.6)} Ajouter des pages</a>
+        <button class="btn light" id="edit">${ic('edit', 18)} Corriger le texte</button>
       </div>
       <article class="paper rules md">${game.rules_md.trim() ? md(game.rules_md) : '<p>Aucune règle enregistrée pour l\'instant.</p>'}</article>
       <div class="rules-actions" style="margin-top:28px">
-        <button class="btn danger" id="del">Supprimer ce jeu</button>
+        <button class="btn danger" id="del">${ic('trash', 18)} Supprimer ce jeu</button>
       </div>`;
     document.getElementById('edit').onclick = edit;
     document.getElementById('del').onclick = async () => {
@@ -565,7 +588,7 @@ function paneRules(pane, game) {
         </div>
         <label>Règles <span class="hint">(Markdown : ## Titre, - liste, **gras**)</span>
           <textarea name="rules_md" rows="18">${esc(game.rules_md)}</textarea></label>
-        <div class="row"><button class="btn gold" type="submit">Enregistrer</button><button class="btn light" type="button" id="cancel">Annuler</button></div>
+        <div class="row"><button class="btn gold" type="submit">${ic('save', 18, 2.6)} Enregistrer</button><button class="btn light" type="button" id="cancel">Annuler</button></div>
       </form>`;
     document.getElementById('cancel').onclick = view;
     document.getElementById('f').onsubmit = async (e) => {
@@ -587,7 +610,7 @@ function paneNotes(pane, game) {
       <label>Nos règles maison et rappels
         <span class="hint">L'IA en tient compte dans ses réponses. Ex : « On joue sans l'extension », « Les enfants commencent avec 2 cartes de plus ».</span>
         <textarea name="house_notes" rows="10">${esc(game.house_notes)}</textarea></label>
-      <button class="btn gold" type="submit">Enregistrer</button>
+      <button class="btn gold" type="submit">${ic('save', 18, 2.6)} Enregistrer</button>
     </form>
     <h2 style="font-family:var(--font-title);margin:28px 0 10px">Questions récentes</h2>
     <div class="thread" id="hist"><div class="spinner"></div></div>`;
@@ -630,7 +653,7 @@ function showOffline(message) {
   showSplash();
   const st = document.getElementById('splash-status');
   st.hidden = false;
-  st.innerHTML = `<span>${esc(message)}</span><button class="btn gold" id="retry">Réessayer</button>`;
+  st.innerHTML = `<span>${esc(message)}</span><button class="btn gold" id="retry">${ic('retry', 18)} Réessayer</button>`;
   document.getElementById('retry').onclick = boot;
 }
 
