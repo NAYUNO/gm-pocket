@@ -271,3 +271,24 @@ a { color: var(--gold); }
 .empty-ic { color: var(--gold); margin-bottom: 10px; display: flex; justify-content: center; }
 .a .tools button .ic { color: var(--gold-deep); }
 .btn.danger .ic { color: var(--red); }
+
+/* ---------- Réglages de voix */
+.ghost.round { width: 40px; height: 40px; padding: 0; border-radius: 50%; color: var(--gold); text-decoration: none; }
+.presets { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.preset {
+  text-align: left; border: 2px solid transparent; border-radius: var(--radius); padding: 12px; cursor: pointer;
+  background: linear-gradient(var(--paper), var(--paper)) padding-box, linear-gradient(var(--line), var(--line)) border-box;
+  color: var(--ink); display: grid; gap: 2px; font-size: 13px; line-height: 1.3;
+}
+.preset strong { font-size: 16px; }
+.preset span:last-child { color: var(--ink-soft); }
+.preset.on { background: linear-gradient(var(--paper), var(--paper)) padding-box, var(--gold-metal) border-box; box-shadow: var(--shadow); }
+.preset-ic {
+  width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; margin-bottom: 6px;
+  background: var(--felt); color: var(--gold); box-shadow: inset 0 0 0 1.5px var(--gold);
+}
+.form input[type=range] { width: 100%; accent-color: var(--gold-deep); }
+.range-ends { display: flex; justify-content: space-between; font-weight: 400; font-size: 13px; color: var(--ink-soft); }
+.form select {
+  width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: #fffaf0; color: var(--ink); font-weight: 400;
+}

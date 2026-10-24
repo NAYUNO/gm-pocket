@@ -43,6 +43,11 @@ const P = {
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
   dice: '<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="16" cy="16" r="1.3" fill="currentColor"/>',
   save: '<path d="M5 12l4 4L19 6"/>',
+  voice: '<path d="M3 10v4M7 7v10M11 4v16M15 8v8M19 10v4"/>',
+  crown: '<path d="M3 8l4 4 5-7 5 7 4-4-2 11H5z"/><path d="M5 19h14"/>',
+  shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
+  sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>',
+  play: '<path d="M7 4l13 8-13 8z"/>',
 };
 const ic = (name, size = 20, sw = 2.2) =>
   `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]}</svg>`;
@@ -160,9 +165,56 @@ function frenchVoice() {
 }
 if (!NativeTTS && 'speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => {};
 
-function speak(text) {
+// ------------------------------------------------------------------ Réglages de voix (« modulateur »)
+
+const VOICE_PRESETS = {
+  normal: { label: 'Normale', desc: 'La voix du téléphone, telle quelle', pitch: 1, rate: 1, icon: 'speaker' },
+  conteur: { label: 'Conteur', desc: 'Posée et chaleureuse', pitch: 0.85, rate: 0.9, icon: 'book' },
+  maitre: { label: 'Maître du jeu', desc: 'Grave, lente, solennelle', pitch: 0.6, rate: 0.82, icon: 'crown' },
+  golem: { label: 'Golem', desc: 'Très grave et pesante', pitch: 0.4, rate: 0.75, icon: 'shield' },
+  lutin: { label: 'Lutin', desc: 'Aiguë et rapide', pitch: 1.7, rate: 1.2, icon: 'sparkle' },
+  express: { label: 'Express', desc: 'Normale mais plus rapide', pitch: 1, rate: 1.35, icon: 'bolt' },
+};
+const VOICE_DEFAULT = { preset: 'normal', pitch: 1, rate: 1, voice: '' };
+
+function getVoiceSettings() {
+  try { return { ...VOICE_DEFAULT, ...JSON.parse(localStorage.getItem('gmpocket.voice') || '{}') }; } catch { return { ...VOICE_DEFAULT }; }
+}
+function setVoiceSettings(v) {
+  try { localStorage.setItem('gmpocket.voice', JSON.stringify(v)); } catch { /* stockage indisponible */ }
+}
+
+// Liste des voix du téléphone (index = position dans la liste complète, utilisé par Android).
+let voiceCache = null;
+async function listVoices() {
+  if (voiceCache) return voiceCache;
+  let all = [];
+  try {
+    if (NativeTTS) all = (await NativeTTS.getSupportedVoices()).voices || [];
+    else if ('speechSynthesis' in window) {
+      all = speechSynthesis.getVoices();
+      if (!all.length) {
+        await new Promise((r) => { speechSynthesis.onvoiceschanged = r; setTimeout(r, 1200); });
+        all = speechSynthesis.getVoices();
+      }
+    }
+  } catch { all = []; }
+  voiceCache = all.map((v, index) => ({ index, name: v.name, lang: v.lang, local: v.localService, raw: v }))
+    .filter((v) => /^fr/i.test(v.lang || ''));
+  return voiceCache;
+}
+
+function prettyVoiceName(v, i) {
+  const n = String(v.name || '');
+  const region = /CA/i.test(v.lang) ? ' (Québec)' : /BE/i.test(v.lang) ? ' (Belgique)' : /CH/i.test(v.lang) ? ' (Suisse)' : '';
+  const short = n.replace(/^fr[-_]fr[-_]x[-_]/i, '').replace(/[-_](local|network)$/i, '');
+  return `Voix ${i + 1}${region} · ${short.slice(0, 22)}${v.local === false ? ' (en ligne)' : ''}`;
+}
+
+async function speak(text, override) {
   if (!canSpeak) return;
   stopSpeaking();
+  const vs = { ...getVoiceSettings(), ...(override || {}) };
   const clean = String(text)
     .replace(/\[[^\]]*\]/g, '')
     .replace(/[#*`>_]/g, '')
@@ -170,15 +222,20 @@ function speak(text) {
     .replace(/\n+/g, '. ')
     .replace(/\.\s*\./g, '.')
     .trim();
+  const voices = vs.voice ? await listVoices() : [];
+  const chosen = voices.find((v) => v.name === vs.voice);
   if (NativeTTS) {
-    NativeTTS.speak({ text: clean, lang: 'fr-FR', rate: 1.0 }).catch(() => {});
+    const opts = { text: clean, lang: chosen?.lang || 'fr-FR', rate: vs.rate, pitch: vs.pitch };
+    if (chosen) opts.voice = chosen.index;
+    NativeTTS.speak(opts).catch(() => {});
     return;
   }
   const u = new SpeechSynthesisUtterance(clean);
-  u.lang = 'fr-FR';
-  const v = frenchVoice();
+  u.lang = chosen?.lang || 'fr-FR';
+  const v = chosen?.raw || frenchVoice();
   if (v) u.voice = v;
-  u.rate = 1.02;
+  u.rate = vs.rate;
+  u.pitch = vs.pitch;
   speechSynthesis.speak(u);
 }
 
@@ -197,6 +254,7 @@ function route() {
   if (!state.user && hash !== '#/login') { location.hash = '#/login'; return; }
   let m;
   if (hash === '#/login') return viewLogin();
+  if (hash === '#/voice') return viewVoice();
   if (hash.startsWith('#/add')) {
     const gid = new URLSearchParams(hash.split('?')[1] || '').get('game');
     return viewAdd(gid ? Number(gid) : null);
@@ -249,6 +307,68 @@ function viewLogin() {
   render();
 }
 
+// ------------------------------------------------------------------ Écran « Voix »
+
+async function viewVoice() {
+  let vs = getVoiceSettings();
+  const sample = "Bienvenue, aventuriers ! Je suis votre maître du jeu. Posez-moi vos questions sur les règles.";
+  $app.innerHTML = `
+    <header class="top">
+      <button class="back" aria-label="Retour" onclick="history.back()">${icon.back}</button>
+      <h1>Voix du maître du jeu</h1>
+    </header>
+    ${canSpeak ? '' : '<p class="paper form">La lecture à voix haute n\'est pas disponible sur cet appareil.</p>'}
+    <div class="presets" id="presets"></div>
+    <form class="paper form" id="f" style="margin-top:14px">
+      <label>Tonalité <span class="hint" id="pv"></span>
+        <input type="range" name="pitch" min="0.3" max="2" step="0.05">
+        <span class="range-ends"><span>Grave</span><span>Aiguë</span></span></label>
+      <label>Vitesse <span class="hint" id="rv"></span>
+        <input type="range" name="rate" min="0.5" max="1.8" step="0.05">
+        <span class="range-ends"><span>Lente</span><span>Rapide</span></span></label>
+      <label>Voix du téléphone
+        <select name="voice" id="voice"><option value="">Voix française par défaut</option></select>
+        <span class="hint">Les voix disponibles dépendent du téléphone. Sur Android : Paramètres › Synthèse vocale pour en télécharger d'autres.</span></label>
+      <label class="autoread" style="color:var(--ink)"><input type="checkbox" name="auto"> Lire automatiquement les réponses</label>
+      <div class="row">
+        <button class="btn gold" type="button" id="try">${ic('play', 18)} Essayer</button>
+        <button class="btn light" type="button" id="reset">Remettre par défaut</button>
+      </div>
+    </form>`;
+  const f = document.getElementById('f');
+  const pv = document.getElementById('pv');
+  const rv = document.getElementById('rv');
+  const sync = () => {
+    f.pitch.value = vs.pitch; f.rate.value = vs.rate; f.voice.value = vs.voice || '';
+    pv.textContent = `× ${Number(vs.pitch).toFixed(2)}`; rv.textContent = `× ${Number(vs.rate).toFixed(2)}`;
+    f.auto.checked = getAutoRead();
+    document.getElementById('presets').innerHTML = Object.entries(VOICE_PRESETS).map(([k, p]) => `
+      <button type="button" class="preset${vs.preset === k ? ' on' : ''}" data-k="${k}">
+        <span class="preset-ic">${ic(p.icon, 22)}</span>
+        <strong>${p.label}</strong><span>${p.desc}</span></button>`).join('');
+    document.querySelectorAll('.preset').forEach((b) => (b.onclick = () => {
+      const p = VOICE_PRESETS[b.dataset.k];
+      vs = { ...vs, preset: b.dataset.k, pitch: p.pitch, rate: p.rate };
+      setVoiceSettings(vs); sync(); speak(sample, vs);
+    }));
+  };
+  const save = () => { setVoiceSettings(vs); sync(); };
+  f.pitch.oninput = () => { vs = { ...vs, pitch: Number(f.pitch.value), preset: 'perso' }; save(); };
+  f.rate.oninput = () => { vs = { ...vs, rate: Number(f.rate.value), preset: 'perso' }; save(); };
+  f.pitch.onchange = f.rate.onchange = () => speak(sample, vs);
+  f.voice.onchange = () => { vs = { ...vs, voice: f.voice.value }; save(); speak(sample, vs); };
+  f.auto.onchange = () => setAutoRead(f.auto.checked);
+  document.getElementById('try').onclick = () => speak(sample, vs);
+  document.getElementById('reset').onclick = () => { vs = { ...VOICE_DEFAULT }; save(); speak(sample, vs); };
+  sync();
+  const voices = await listVoices();
+  const sel = document.getElementById('voice');
+  if (!sel) return;
+  sel.insertAdjacentHTML('beforeend', voices.map((v, i) => `<option value="${esc(v.name)}">${esc(prettyVoiceName(v, i))}</option>`).join(''));
+  sel.value = vs.voice || '';
+  if (vs.voice && sel.value !== vs.voice) { vs = { ...vs, voice: '' }; save(); }
+}
+
 async function loadMe() {
   const { user, modes } = await api('/api/me');
   state.user = user;
@@ -261,6 +381,7 @@ async function viewLibrary() {
   $app.innerHTML = `
     <header class="top">
       <h1>GM Pocket<span class="dot">.</span></h1>
+      <a class="ghost round" href="#/voice" aria-label="Réglages de la voix">${ic('voice', 18)}</a>
       <button class="ghost" id="logout">${esc(state.user.name)} ${ic('logout', 16)}</button>
     </header>
     <label class="search-wrap">${ic('search', 18)}<input class="search" id="q" type="search" placeholder="Chercher un jeu…" aria-label="Chercher un jeu"></label>
