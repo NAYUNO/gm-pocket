@@ -256,14 +256,31 @@ app.get('/healthz', (_req, res) => res.send('ok'));
 app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h', index: 'index.html' }));
 app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));
 
+// Traduit les erreurs en messages compréhensibles, sans jamais renvoyer de détail technique
+// au téléphone (un message brut peut contenir un morceau de la clé API).
+function friendlyError(err) {
+  const raw = String(err?.message || '');
+  if (err instanceof multer.MulterError) return [413, 'Fichier trop lourd ou trop de fichiers (20 max, 25 Mo chacun)'];
+  if (/ANTHROPIC_API_KEY manquant/.test(raw)) return [500, "La clé API n'est pas configurée sur le serveur (Render › Environment)."];
+  if (/header/i.test(raw) && /Bearer|api.?key|x-api-key/i.test(raw)) {
+    return [500, 'La clé API enregistrée sur le serveur est mal formée. Recolle-la dans Render › Environment.'];
+  }
+  if (err?.status === 401 || /authentication|invalid x-api-key|invalid api key/i.test(raw)) {
+    return [500, "La clé API est refusée par Anthropic. Vérifie qu'elle commence par sk-ant-api03- et recolle-la dans Render."];
+  }
+  if (/credit balance|billing|insufficient/i.test(raw)) {
+    return [402, "Crédit API épuisé : ajoute des crédits sur console.anthropic.com (Billing)."];
+  }
+  if (err?.status === 429 || err?.status === 529) return [429, "L'IA est très sollicitée, réessaie dans un instant."];
+  if (err?.status === 413 || /too large|request_too_large/i.test(raw)) return [413, 'Envoi trop lourd pour l\'IA : envoie moins de pages à la fois.'];
+  if (err?.status >= 400 && err?.status < 500 && err.expose !== false && !err.headers) return [err.status, raw || 'Requête invalide'];
+  return [500, 'Erreur du serveur, réessaie. Si ça continue, regarde les journaux sur Render.'];
+}
+
 app.use((err, _req, res, _next) => {
   console.error(err);
-  if (err instanceof multer.MulterError) {
-    return res.status(413).json({ error: 'Fichier trop lourd ou trop de fichiers (20 max, 25 Mo chacun)' });
-  }
-  const status = err.status && err.status >= 400 && err.status < 600 ? err.status : 500;
-  const msg = status === 429 ? "L'IA est très sollicitée, réessaie dans un instant" : err.message || 'Erreur serveur';
-  res.status(status >= 500 ? 500 : status).json({ error: msg });
+  const [status, msg] = friendlyError(err);
+  res.status(status).json({ error: msg });
 });
 
 export async function start() {

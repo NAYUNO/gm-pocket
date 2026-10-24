@@ -8,8 +8,10 @@ const MOCK = process.env.MOCK_AI === '1';
 let client;
 function getClient() {
   if (!client) {
-    if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY manquant');
-    client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    // Tolère les erreurs de copier-coller courantes : espaces, retours à la ligne, guillemets.
+    const apiKey = String(process.env.ANTHROPIC_API_KEY || '').replace(/[\s"'`]/g, '');
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');
+    client = new Anthropic({ apiKey });
   }
   return client;
 }
